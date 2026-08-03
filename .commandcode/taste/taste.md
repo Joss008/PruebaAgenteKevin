@@ -1,0 +1,2 @@
+- Prefiere comunicarse en español. Confidence: 0.9
+- Para diseñar una arquitectura, prefiere que primero se revise la documentación del proyecto (por ejemplo, `PROJECT.md`). Confidence: 0.85

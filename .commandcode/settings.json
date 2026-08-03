@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(npx create-next-app@latest pagos-agent --typescript --tailwind --eslint --app --src-dir --import-alias @/* --use-npm --no-turbopack 2 >& 1)",
+      "Shell(npm:*)",
+      "Shell(npx shadcn@latest init -d 2 >& 1)",
+      "Shell(npx shadcn@latest add button card input label dialog badge 2 >& 1)",
+      "Shell(npx next build 2 >& 1)",
+      "Shell(npx next build --webpack 2 >& 1)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
