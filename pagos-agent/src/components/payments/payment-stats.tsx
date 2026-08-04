@@ -39,28 +39,51 @@ export function PaymentStats({ payments }: PaymentStatsProps) {
     {
       label: "Gasto mensual estimado",
       value: `S/ ${estimatedMonthly.toLocaleString()}`,
-      icon: "📊",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="20" x2="12" y2="10"></line>
+          <line x1="18" y1="20" x2="18" y2="4"></line>
+          <line x1="6" y1="20" x2="6" y2="16"></line>
+        </svg>
+      ),
       color: "text-foreground",
       bg: "bg-primary/5 dark:bg-primary/10",
     },
     {
       label: "Pendiente por pagar",
       value: `S/ ${pendingTotal.toLocaleString()}`,
-      icon: "⏳",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+      ),
       color: "text-amber-600 dark:text-amber-400",
       bg: "bg-amber-50 dark:bg-amber-500/10",
     },
     {
       label: "Vencidos",
       value: `${expiredCount} pago(s)`,
-      icon: "🔴",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg>
+      ),
       color: "text-red-600 dark:text-red-400",
       bg: "bg-red-50 dark:bg-red-500/10",
     },
     {
       label: "Por vencer",
       value: `${upcomingCount} pago(s)`,
-      icon: "🟠",
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      ),
       color: "text-orange-600 dark:text-orange-400",
       bg: "bg-orange-50 dark:bg-orange-500/10",
     },
@@ -74,7 +97,7 @@ export function PaymentStats({ payments }: PaymentStatsProps) {
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
               <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.bg}`}>
-                <span className="text-sm">{stat.icon}</span>
+                <span className={stat.color}>{stat.icon}</span>
               </div>
             </div>
             <p className={`text-2xl font-heading font-bold ${stat.color}`}>{stat.value}</p>

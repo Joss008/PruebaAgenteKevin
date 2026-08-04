@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getUpcomingPayments, resetCyclePayments, describeFrequency } from "@/services/payment.service";
-import type { PaymentFrequency } from "@/models/Payment";
-import { sendEmail } from "@/services/email.service";
+import { getCategorizedUpcomingPayments, resetCyclePayments } from "@/services/payment.service";
+import { sendEmail, buildProximoAVencerHtml, buildVenceHoyHtml, buildVencidoHtml } from "@/services/email.service";
 
 export async function GET(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -13,52 +12,48 @@ export async function GET(req: Request) {
   }
 
   try {
-    const payments = await getUpcomingPayments(3);
-
-    const byUser = new Map<
-      string,
-      {
-        email: string;
-        name: string;
-        payments: Array<{
-          title: string;
-          amount: number;
-          frequency?: string;
-          intervalDays?: number;
-          dueDay?: number;
-        }>;
-      }
-    >();
-    for (const p of payments) {
-      const user = p.userId as unknown as { _id: { toString(): string }; email: string; name: string };
-      const uid = user._id.toString();
-      if (!byUser.has(uid)) {
-        byUser.set(uid, {
-          email: user.email,
-          name: user.name,
-          payments: [],
-        });
-      }
-      byUser.get(uid)!.payments.push(p);
-    }
+    const categorized = await getCategorizedUpcomingPayments();
 
     let sent = 0;
-    for (const [, userData] of byUser) {
-      const paymentList = userData.payments
-        .map((p) => `<li>${p.title}: S/ ${p.amount} (${describeFrequency((p.frequency ?? "mensual") as PaymentFrequency, p.intervalDays, p.dueDay)})</li>`)
-        .join("");
+    let totalPayments = 0;
 
-      await sendEmail(
-        userData.email,
-        `Recordatorio: tienes ${userData.payments.length} pago(s) próximo(s)`,
-        `<p>Hola ${userData.name},</p><p>Tienes los siguientes pagos próximos a vencer:</p><ul>${paymentList}</ul><p>Saludos,<br/>Pagos Agent</p>`
-      );
-      sent++;
+    for (const [, userData] of categorized) {
+      const { email, name, vencido, vence_hoy, proximo_a_vencer } = userData;
+
+      if (proximo_a_vencer.length > 0) {
+        totalPayments += proximo_a_vencer.length;
+        await sendEmail(
+          email,
+          `Recordatorio: tienes ${proximo_a_vencer.length} pago(s) proximo(s) a vencer`,
+          buildProximoAVencerHtml(name, proximo_a_vencer)
+        );
+        sent++;
+      }
+
+      if (vence_hoy.length > 0) {
+        totalPayments += vence_hoy.length;
+        await sendEmail(
+          email,
+          `Urgente: hoy vencen ${vence_hoy.length} pago(s)`,
+          buildVenceHoyHtml(name, vence_hoy)
+        );
+        sent++;
+      }
+
+      if (vencido.length > 0) {
+        totalPayments += vencido.length;
+        await sendEmail(
+          email,
+          `Alerta: olvidaste pagar ${vencido.length} pago(s)`,
+          buildVencidoHtml(name, vencido)
+        );
+        sent++;
+      }
     }
 
     const resetCount = await resetCyclePayments();
 
-    return NextResponse.json({ sent, total: payments.length, resetCount });
+    return NextResponse.json({ sent, total: totalPayments, resetCount });
   } catch (error) {
     console.error("Error en cron de recordatorios:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

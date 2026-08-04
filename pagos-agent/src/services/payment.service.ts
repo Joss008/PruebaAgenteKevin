@@ -145,3 +145,73 @@ export async function resetCyclePayments() {
   }
   return count;
 }
+
+export type PaymentCategory = "vencido" | "vence_hoy" | "proximo_a_vencer";
+
+export interface CategorizedPayment {
+  _id: string;
+  title: string;
+  amount: number;
+  frequency?: string;
+  intervalDays?: number;
+  dueDay?: number;
+  nextDueDate: Date;
+  category: PaymentCategory;
+}
+
+export interface CategorizedPaymentsByUser {
+  email: string;
+  name: string;
+  vencido: CategorizedPayment[];
+  vence_hoy: CategorizedPayment[];
+  proximo_a_vencer: CategorizedPayment[];
+}
+
+export async function getCategorizedUpcomingPayments(): Promise<Map<string, CategorizedPaymentsByUser>> {
+  const today = startOfDay(new Date());
+  const windowEnd = addDays(today, 3);
+
+  const payments = await paymentRepo.findUpcomingPayments(3);
+
+  const byUser = new Map<string, CategorizedPaymentsByUser>();
+
+  for (const p of payments) {
+    const user = p.userId as unknown as { _id: { toString(): string }; email: string; name: string };
+    const uid = user._id.toString();
+
+    if (!byUser.has(uid)) {
+      byUser.set(uid, {
+        email: user.email,
+        name: user.name,
+        vencido: [],
+        vence_hoy: [],
+        proximo_a_vencer: [],
+      });
+    }
+
+    const nextDue = computeNextDueDate(p);
+    if (!nextDue) continue;
+
+    let category: PaymentCategory;
+    if (nextDue < today) {
+      category = "vencido";
+    } else if (nextDue.getTime() === today.getTime()) {
+      category = "vence_hoy";
+    } else {
+      category = "proximo_a_vencer";
+    }
+
+    byUser.get(uid)![category].push({
+      _id: p._id.toString(),
+      title: p.title,
+      amount: p.amount,
+      frequency: p.frequency,
+      intervalDays: p.intervalDays,
+      dueDay: p.dueDay,
+      nextDueDate: nextDue,
+      category,
+    });
+  }
+
+  return byUser;
+}
