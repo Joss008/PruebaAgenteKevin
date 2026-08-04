@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth } from "@/services/auth.service";
 import { getPaymentsByUser, createPayment } from "@/services/payment.service";
 import type { PaymentFrequency } from "@/models/Payment";
 
@@ -28,9 +28,9 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!startDate) {
+  if (!startDate && frequency !== "mensual") {
     return NextResponse.json(
-      { error: "startDate es requerido" },
+      { error: "startDate es requerido para pagos que no son mensuales" },
       { status: 400 }
     );
   }
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     title,
     amount: Number(amount),
     frequency,
-    startDate: new Date(startDate),
+    startDate: startDate ? new Date(startDate) : new Date(),
   };
 
   if (frequency === "mensual") {

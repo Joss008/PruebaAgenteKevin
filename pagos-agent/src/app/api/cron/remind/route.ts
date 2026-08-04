@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUpcomingPayments, resetCyclePayments, describeFrequency } from "@/services/payment.service";
 import type { PaymentFrequency } from "@/models/Payment";
-import { sendEmail } from "@/lib/email";
+import { sendEmail } from "@/services/email.service";
 
 export async function GET(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -15,7 +15,6 @@ export async function GET(req: Request) {
   try {
     const payments = await getUpcomingPayments(3);
 
-    // Group by user
     const byUser = new Map<
       string,
       {
@@ -46,7 +45,7 @@ export async function GET(req: Request) {
     let sent = 0;
     for (const [, userData] of byUser) {
       const paymentList = userData.payments
-        .map((p) => `<li>${p.title}: $${p.amount} (${describeFrequency((p.frequency ?? "mensual") as PaymentFrequency, p.intervalDays, p.dueDay)})</li>`)
+        .map((p) => `<li>${p.title}: S/ ${p.amount} (${describeFrequency((p.frequency ?? "mensual") as PaymentFrequency, p.intervalDays, p.dueDay)})</li>`)
         .join("");
 
       await sendEmail(
@@ -57,7 +56,6 @@ export async function GET(req: Request) {
       sent++;
     }
 
-    // Restablece pagos que ya deberían volver a estar activos en su nuevo ciclo
     const resetCount = await resetCyclePayments();
 
     return NextResponse.json({ sent, total: payments.length, resetCount });

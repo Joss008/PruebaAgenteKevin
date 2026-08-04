@@ -23,59 +23,62 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-poppins);
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --primary: #2563eb;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: #6366f1;
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
+  --secondary-foreground: #334155;
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
   --destructive: #ef4444;
   --card: #ffffff;
-  --card-foreground: #171717;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #171717;
+  --popover-foreground: #0f172a;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #2563eb;
+  --ring: #6366f1;
   --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --radius: 0.625rem;
+  --accent-foreground: #334155;
+  --radius: 0.75rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --primary: #3b82f6;
-    --primary-foreground: #ffffff;
-    --secondary: #1e293b;
-    --secondary-foreground: #f1f5f9;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --destructive: #dc2626;
-    --card: #0a0a0a;
-    --card-foreground: #ededed;
-    --popover: #0a0a0a;
-    --popover-foreground: #ededed;
-    --border: #1e293b;
-    --input: #1e293b;
-    --ring: #3b82f6;
-    --accent: #1e293b;
-    --accent-foreground: #f1f5f9;
-  }
+.dark {
+  --background: #0b0f1a;
+  --foreground: #e2e8f0;
+  --primary: #818cf8;
+  --primary-foreground: #0f172a;
+  --secondary: #1e293b;
+  --secondary-foreground: #cbd5e1;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --destructive: #f87171;
+  --card: #111827;
+  --card-foreground: #e2e8f0;
+  --popover: #111827;
+  --popover-foreground: #e2e8f0;
+  --border: #1e293b;
+  --input: #1e293b;
+  --ring: #818cf8;
+  --accent: #1e293b;
+  --accent-foreground: #cbd5e1;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading), system-ui, sans-serif;
 }
 
 /* Animated gradient background */
@@ -93,16 +96,16 @@ body {
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle at 30% 20%, color-mix(in oklch, var(--primary), transparent 92%) 0%, transparent 50%),
+  background: radial-gradient(circle at 30% 20%, color-mix(in oklch, var(--primary), transparent 90%) 0%, transparent 50%),
               radial-gradient(circle at 70% 80%, color-mix(in oklch, #10b981, transparent 92%) 0%, transparent 50%),
-              radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--accent), transparent 80%) 0%, transparent 60%);
-  animation: gradientShift 20s ease-in-out infinite;
+              radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--accent), transparent 82%) 0%, transparent 60%);
+  animation: gradientShift 25s ease-in-out infinite;
 }
 
 .dark .bg-animated::before {
-  background: radial-gradient(circle at 30% 20%, color-mix(in oklch, var(--primary), transparent 88%) 0%, transparent 50%),
-              radial-gradient(circle at 70% 80%, color-mix(in oklch, #10b981, transparent 88%) 0%, transparent 50%),
-              radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--accent), transparent 75%) 0%, transparent 60%);
+  background: radial-gradient(circle at 30% 20%, color-mix(in oklch, var(--primary), transparent 85%) 0%, transparent 50%),
+              radial-gradient(circle at 70% 80%, color-mix(in oklch, #10b981, transparent 87%) 0%, transparent 50%),
+              radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--accent), transparent 72%) 0%, transparent 60%);
 }
 
 @keyframes gradientShift {
@@ -125,13 +128,24 @@ body {
 }
 
 .dark .bg-animated::after {
-  background-image: radial-gradient(circle, color-mix(in oklch, var(--primary), transparent 80%) 1px, transparent 1px),
-                    radial-gradient(circle, color-mix(in oklch, #10b981, transparent 80%) 1px, transparent 1px);
+  background-image: radial-gradient(circle, color-mix(in oklch, var(--primary), transparent 78%) 1px, transparent 1px),
+                    radial-gradient(circle, color-mix(in oklch, #10b981, transparent 78%) 1px, transparent 1px);
 }
 
 @keyframes dotsFloat {
   0% { transform: translateY(0); }
   100% { transform: translateY(-60px); }
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: color-mix(in oklch, var(--card), transparent 15%);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+}
+
+.dark .glass {
+  background: color-mix(in oklch, var(--card), transparent 30%);
 }
 
 /* Select component dark mode fixes */

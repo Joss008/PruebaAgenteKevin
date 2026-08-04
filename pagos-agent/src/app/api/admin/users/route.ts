@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { connectDB } from "@/lib/db";
-import User from "@/models/User";
-import Payment from "@/models/Payment";
+import { auth } from "@/services/auth.service";
+import { findAllUsers } from "@/repositories/user.repository";
+import { findAllPayments } from "@/repositories/payment.repository";
 
 export async function GET() {
   const session = await auth();
@@ -10,10 +9,8 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  await connectDB();
-
-  const users = await User.find().lean();
-  const payments = await Payment.find().lean();
+  const users = await findAllUsers();
+  const payments = await findAllPayments();
 
   const usersWithPayments = users.map((u) => ({
     id: u._id.toString(),

@@ -1,4 +1,5 @@
 import { createPayment, getPaymentsByUser, updatePayment, describeFrequency } from "./payment.service";
+import { getPaymentDisplayStatus, getPaymentPriority, computeNextDueDate } from "@/lib/payment-utils";
 
 interface ChatResult {
   message: string;
@@ -57,12 +58,10 @@ function parseRecurrence(text: string): {
 export async function processMessage(message: string, userId: string): Promise<ChatResult> {
   const msg = message.toLowerCase().trim();
 
-  // Ayuda
   if (msg.includes("ayuda") || msg.includes("help") || msg === "?") {
     return { message: HELP_TEXT, action: { type: "help" } };
   }
 
-  // Registrar pago: "agregar pago Netflix 250 día 15" / "cada semana" / "cada 15 días"
   const addMatch = msg.match(
     /(?:agregar|añadir|crear|nuevo|registrar)\s+(?:pago\s+)?(.+?)\s+(\d+)\s+(.+)/
   );
@@ -97,7 +96,7 @@ export async function processMessage(message: string, userId: string): Promise<C
     });
 
     return {
-      message: `✅ Pago registrado: **${formattedTitle}** por $${amount} — ${describeFrequency(
+      message: `✅ Pago registrado: **${formattedTitle}** por S/ ${amount} — ${describeFrequency(
         payment.frequency,
         payment.intervalDays,
         payment.dueDay
@@ -106,7 +105,6 @@ export async function processMessage(message: string, userId: string): Promise<C
     };
   }
 
-  // Marcar como pagado: "ya pagué Netflix"
   const paidMatch = msg.match(/(?:ya pagué|pagué|marcar pagado)\s+(.+)/);
   if (paidMatch) {
     const title = paidMatch[1].trim();
@@ -128,7 +126,6 @@ export async function processMessage(message: string, userId: string): Promise<C
     };
   }
 
-  // Pausar pago: "pausar Netflix"
   const pauseMatch = msg.match(/(?:pausar|suspender)\s+(.+)/);
   if (pauseMatch) {
     const title = pauseMatch[1].trim();
@@ -147,27 +144,68 @@ export async function processMessage(message: string, userId: string): Promise<C
     };
   }
 
-  // Consultar pagos: "mis pagos", "qué pagos tengo"
   if (msg.includes("pago") || msg.includes("pagos") || msg.includes("debo")) {
-    const payments = await getPaymentsByUser(userId);
+    const allPayments = await getPaymentsByUser(userId);
 
-    if (payments.length === 0) {
+    if (allPayments.length === 0) {
       return {
         message:
           "No tienes pagos registrados. Puedes agregar uno con: agregar pago [nombre] [monto] cada [periodo]",
       };
     }
 
-    const list = payments
-      .map(
-        (p) =>
-          `- **${p.title}**: $${p.amount} (${describeFrequency(p.frequency, p.intervalDays, p.dueDay)}) — ${p.status}`
-      )
+    const pendingPayments = allPayments.filter((p) => {
+      if (p.status === "pagado" || p.status === "pausado") return false;
+      const priority = getPaymentPriority(p);
+      return priority === "vencido" || priority === "por_vencer" || priority === "activo";
+    });
+
+    if (pendingPayments.length === 0) {
+      return {
+        message: "No tienes pagos pendientes. Todos tus pagos estan al dia.",
+        action: { type: "listed", data: [] },
+      };
+    }
+
+    const priorityEmoji: Record<string, string> = {
+      vencido: "🔴",
+      por_vencer: "🟠",
+      activo: "🟢",
+    };
+
+    const list = pendingPayments
+      .map((p) => {
+        const priority = getPaymentPriority(p);
+        const emoji = priorityEmoji[priority] || "";
+        const displayStatus = getPaymentDisplayStatus(p);
+        const nextDue = computeNextDueDate({
+          frequency: p.frequency,
+          intervalDays: p.intervalDays,
+          dueDay: p.dueDay,
+          startDate: p.startDate ? new Date(p.startDate) : undefined,
+          lastPaidAt: p.lastPaidAt ? new Date(p.lastPaidAt) : null,
+          createdAt: p.createdAt ? new Date(p.createdAt) : undefined,
+        });
+
+        let dueInfo = "";
+        if (nextDue) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const diffMs = nextDue.getTime() - today.getTime();
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          if (diffDays === 0) dueInfo = " — vence hoy";
+          else if (diffDays === 1) dueInfo = " — vence manana";
+          else if (diffDays > 0) dueInfo = ` — vence en ${diffDays} dias`;
+          else dueInfo = ` — vencido hace ${Math.abs(diffDays)} dias`;
+        }
+
+        return `${emoji} *${p.title}*: S/ ${p.amount} (${describeFrequency(p.frequency, p.intervalDays, p.dueDay)}) — ${displayStatus}${dueInfo}`;
+      })
       .join("\n");
 
     return {
-      message: `Tus pagos:\n\n${list}`,
-      action: { type: "listed", data: payments },
+      message: `Tus pagos pendientes:\n\n${list}`,
+      action: { type: "listed", data: pendingPayments },
     };
   }
 

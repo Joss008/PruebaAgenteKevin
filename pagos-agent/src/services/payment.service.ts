@@ -1,8 +1,8 @@
-import { connectDB } from "@/lib/db";
-import Payment from "@/models/Payment";
 import type { PaymentFrequency } from "@/models/Payment";
+import * as paymentRepo from "@/repositories/payment.repository";
+import { sortPaymentsByPriority } from "@/lib/payment-utils";
 
-const FREQUENCY_INTERVAL: Record<Exclude<PaymentFrequency, "personalizado">, number> = {
+export const FREQ_INTERVAL: Record<Exclude<PaymentFrequency, "personalizado">, number> = {
   diario: 1,
   semanal: 7,
   quincenal: 15,
@@ -11,7 +11,7 @@ const FREQUENCY_INTERVAL: Record<Exclude<PaymentFrequency, "personalizado">, num
 
 export function getIntervalDays(frequency: PaymentFrequency, intervalDays?: number): number {
   if (frequency === "personalizado") return intervalDays && intervalDays > 0 ? intervalDays : 30;
-  return FREQUENCY_INTERVAL[frequency] ?? 30;
+  return FREQ_INTERVAL[frequency] ?? 30;
 }
 
 export function describeFrequency(frequency: PaymentFrequency, intervalDays?: number, dueDay?: number): string {
@@ -81,8 +81,8 @@ export function computeNextDueDate(payment: PaymentDueInfo | null | undefined): 
 }
 
 export async function getPaymentsByUser(userId: string) {
-  await connectDB();
-  return Payment.find({ userId }).sort({ dueDay: 1, createdAt: 1 }).lean();
+  const payments = await paymentRepo.findPaymentsByUser(userId);
+  return sortPaymentsByPriority(payments);
 }
 
 export async function createPayment(data: {
@@ -94,8 +94,7 @@ export async function createPayment(data: {
   dueDay?: number;
   startDate: Date;
 }) {
-  await connectDB();
-  return Payment.create(data);
+  return paymentRepo.createPayment(data);
 }
 
 export async function updatePayment(
@@ -112,23 +111,18 @@ export async function updatePayment(
     lastPaidAt: Date;
   }>
 ) {
-  await connectDB();
-  return Payment.findOneAndUpdate({ _id: id, userId }, data, { new: true }).lean();
+  return paymentRepo.updatePayment(id, userId, data);
 }
 
 export async function deletePayment(id: string, userId: string) {
-  await connectDB();
-  return Payment.findOneAndDelete({ _id: id, userId });
+  return paymentRepo.deletePayment(id, userId);
 }
 
 export async function getUpcomingPayments(daysBefore: number = 3) {
-  await connectDB();
   const today = startOfDay(new Date());
   const windowEnd = addDays(today, daysBefore);
 
-  const payments = await Payment.find({ status: { $ne: "pausado" } })
-    .populate("userId", "email name")
-    .lean();
+  const payments = await paymentRepo.findUpcomingPayments(daysBefore);
 
   return payments.filter((p) => {
     const next = computeNextDueDate(p);
@@ -137,15 +131,15 @@ export async function getUpcomingPayments(daysBefore: number = 3) {
 }
 
 export async function resetCyclePayments() {
-  await connectDB();
   const today = startOfDay(new Date());
-  const paid = await Payment.find({ status: "pagado" }).lean();
+  const paid = await paymentRepo.findUpcomingPayments();
 
   let count = 0;
   for (const p of paid) {
+    if (p.status !== "pagado") continue;
     const next = computeNextDueDate(p);
     if (next && next <= today) {
-      await Payment.updateOne({ _id: p._id }, { status: "activo" });
+      await paymentRepo.updatePaymentStatus(p._id.toString(), "activo");
       count++;
     }
   }
