@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { getUpcomingPayments } from "@/services/payment.service";
-import { sendReminderEmail } from "@/lib/email";
+import { getUpcomingPayments, resetCyclePayments, describeFrequency } from "@/services/payment.service";
+import type { PaymentFrequency } from "@/models/Payment";
+import { sendEmail } from "@/lib/email";
 
-export async function GET() {
+export async function GET(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
-    const authHeader = (await new Request("http://localhost").headers).get("authorization");
+    const authHeader = req.headers.get("authorization");
     if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
@@ -15,26 +16,51 @@ export async function GET() {
     const payments = await getUpcomingPayments(3);
 
     // Group by user
-    const byUser = new Map<string, { email: string; name: string; payments: any[] }>();
+    const byUser = new Map<
+      string,
+      {
+        email: string;
+        name: string;
+        payments: Array<{
+          title: string;
+          amount: number;
+          frequency?: string;
+          intervalDays?: number;
+          dueDay?: number;
+        }>;
+      }
+    >();
     for (const p of payments) {
-      const userId = p.userId._id.toString();
-      if (!byUser.has(userId)) {
-        byUser.set(userId, {
-          email: p.userId.email,
-          name: p.userId.name,
+      const user = p.userId as unknown as { _id: { toString(): string }; email: string; name: string };
+      const uid = user._id.toString();
+      if (!byUser.has(uid)) {
+        byUser.set(uid, {
+          email: user.email,
+          name: user.name,
           payments: [],
         });
       }
-      byUser.get(userId)!.payments.push(p);
+      byUser.get(uid)!.payments.push(p);
     }
 
     let sent = 0;
     for (const [, userData] of byUser) {
-      await sendReminderEmail(userData.email, userData.name, userData.payments);
+      const paymentList = userData.payments
+        .map((p) => `<li>${p.title}: $${p.amount} (${describeFrequency((p.frequency ?? "mensual") as PaymentFrequency, p.intervalDays, p.dueDay)})</li>`)
+        .join("");
+
+      await sendEmail(
+        userData.email,
+        `Recordatorio: tienes ${userData.payments.length} pago(s) próximo(s)`,
+        `<p>Hola ${userData.name},</p><p>Tienes los siguientes pagos próximos a vencer:</p><ul>${paymentList}</ul><p>Saludos,<br/>Pagos Agent</p>`
+      );
       sent++;
     }
 
-    return NextResponse.json({ sent, total: payments.length });
+    // Restablece pagos que ya deberían volver a estar activos en su nuevo ciclo
+    const resetCount = await resetCyclePayments();
+
+    return NextResponse.json({ sent, total: payments.length, resetCount });
   } catch (error) {
     console.error("Error en cron de recordatorios:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

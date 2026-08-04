@@ -7,26 +7,98 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+
+type Frequency = "diario" | "semanal" | "quincenal" | "mensual" | "personalizado";
 
 interface Payment {
   _id: string;
   title: string;
   amount: number;
-  dueDay: number;
+  frequency: Frequency;
+  intervalDays?: number;
+  dueDay?: number;
+  startDate: string;
   status: "activo" | "pagado" | "pausado";
   lastPaidAt: string | null;
+  createdAt: string;
+}
+
+const FREQ_DAYS: Record<Exclude<Frequency, "personalizado">, number> = {
+  diario: 1,
+  semanal: 7,
+  quincenal: 15,
+  mensual: 30,
+};
+
+const FREQ_LABELS: Record<Frequency, string> = {
+  diario: "Cada día",
+  semanal: "Cada semana",
+  quincenal: "Cada 15 días",
+  mensual: "Cada mes",
+  personalizado: "Personalizado",
+};
+
+function getIntervalDays(p: Payment): number {
+  if (p.frequency === "personalizado") return p.intervalDays ?? 30;
+  return FREQ_DAYS[p.frequency];
+}
+
+function describeFrequency(p: Payment): string {
+  if (p.frequency === "mensual") return `Cada mes (día ${p.dueDay ?? "?"})`;
+  if (p.frequency === "personalizado") return `Cada ${p.intervalDays ?? "?"} días`;
+  return FREQ_LABELS[p.frequency];
+}
+
+function formatDate(date: string | Date): string {
+  const d = new Date(date);
+  return d.toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function startOfDay(d: Date): Date {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function monthlyDue(year: number, month: number, dueDay: number): Date {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(dueDay, lastDay));
+}
+
+function nextDueDate(p: Payment): Date | null {
+  const today = startOfDay(new Date());
+
+  if (p.frequency === "mensual") {
+    const dueDay = p.dueDay || 1;
+    let next = monthlyDue(today.getFullYear(), today.getMonth(), dueDay);
+    if (next < today) next = monthlyDue(today.getFullYear(), today.getMonth() + 1, dueDay);
+    return next;
+  }
+
+  const base = p.lastPaidAt ? new Date(p.lastPaidAt) : new Date(p.createdAt);
+  const next = new Date(base);
+  next.setDate(next.getDate() + getIntervalDays(p));
+  return startOfDay(next);
 }
 
 const statusColors: Record<string, string> = {
-  activo: "bg-green-100 text-green-800",
-  pagado: "bg-blue-100 text-blue-800",
-  pausado: "bg-yellow-100 text-yellow-800",
+  activo: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-400",
+  pagado: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-400",
+  pausado: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-400",
 };
 
 export default function DashboardPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", amount: "", dueDay: "" });
+  const [form, setForm] = useState<{
+    title: string;
+    amount: string;
+    frequency: Frequency;
+    dueDay: string;
+    intervalDays: string;
+    startDate: string;
+  }>({ title: "", amount: "", frequency: "mensual", dueDay: "", intervalDays: "", startDate: "" });
 
   const fetchPayments = async () => {
     const res = await fetch("/api/payments");
@@ -35,21 +107,36 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchPayments();
+    let active = true;
+    fetch("/api/payments")
+      .then((res) => res.json())
+      .then((data) => {
+        if (active) setPayments(data);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const body: Record<string, unknown> = {
+      title: form.title,
+      amount: Number(form.amount),
+      frequency: form.frequency,
+      startDate: form.startDate,
+    };
+
+    if (form.frequency === "mensual") body.dueDay = Number(form.dueDay);
+    if (form.frequency === "personalizado") body.intervalDays = Number(form.intervalDays);
+
     await fetch("/api/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: form.title,
-        amount: Number(form.amount),
-        dueDay: Number(form.dueDay),
-      }),
+      body: JSON.stringify(body),
     });
-    setForm({ title: "", amount: "", dueDay: "" });
+    setForm({ title: "", amount: "", frequency: "mensual", dueDay: "", intervalDays: "", startDate: "" });
     setOpen(false);
     fetchPayments();
   };
@@ -70,19 +157,24 @@ export default function DashboardPage() {
 
   const totalMonthly = payments
     .filter((p) => p.status === "activo")
-    .reduce((sum, p) => sum + p.amount, 0);
+    .reduce((sum, p) => sum + p.amount * (30 / getIntervalDays(p)), 0);
 
-  const today = new Date().getDate();
-  const upcoming = payments
-    .filter((p) => p.status === "activo" && p.dueDay >= today && p.dueDay <= today + 3);
+  const today = startOfDay(new Date());
+  const windowEnd = new Date(today);
+  windowEnd.setDate(windowEnd.getDate() + 3);
+  const upcoming = payments.filter((p) => {
+    if (p.status === "pausado") return false;
+    const next = nextDueDate(p);
+    return next && next <= windowEnd;
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Mis Pagos</h1>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>+ Nuevo pago</Button>
+          <DialogTrigger render={<Button />}>
+            + Nuevo pago
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -111,18 +203,67 @@ export default function DashboardPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dueDay">Día del mes</Label>
+                <Label htmlFor="frequency">¿Cada cuánto?</Label>
+                <Select
+                  value={form.frequency}
+                  onValueChange={(value: string | null) => value && setForm({ ...form, frequency: value as Frequency })}
+                  items={(Object.keys(FREQ_LABELS) as Frequency[]).map((f) => ({
+                    value: f,
+                    label: FREQ_LABELS[f],
+                  }))}
+                >
+                  <SelectTrigger id="frequency" className="w-full">
+                    <SelectValue placeholder="Selecciona una frecuencia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(FREQ_LABELS) as Frequency[]).map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {FREQ_LABELS[f]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="startDate">Fecha de inicio del pago</Label>
                 <Input
-                  id="dueDay"
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={form.dueDay}
-                  onChange={(e) => setForm({ ...form, dueDay: e.target.value })}
-                  placeholder="15"
+                  id="startDate"
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => setForm({ ...form, startDate: e.target.value })}
                   required
                 />
               </div>
+              {form.frequency === "mensual" && (
+                <div className="space-y-2">
+                  <Label htmlFor="dueDay">Día del mes</Label>
+                  <Input
+                    id="dueDay"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={form.dueDay}
+                    onChange={(e) => setForm({ ...form, dueDay: e.target.value })}
+                    placeholder="15"
+                    required
+                  />
+                </div>
+              )}
+              {form.frequency === "personalizado" && (
+                <div className="space-y-2">
+                  <Label htmlFor="intervalDays">Cada cuántos días</Label>
+                  <Input
+                    id="intervalDays"
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={form.intervalDays}
+                    onChange={(e) => setForm({ ...form, intervalDays: e.target.value })}
+                    placeholder="Por ejemplo: 20"
+                    required
+                  />
+                </div>
+              )}
               <Button type="submit" className="w-full">Guardar</Button>
             </form>
           </DialogContent>
@@ -132,8 +273,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
-              Total mensual activo
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total mensual activo (aprox.)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -142,7 +283,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               Próximos a vencer
             </CardTitle>
           </CardHeader>
@@ -154,7 +295,7 @@ export default function DashboardPage() {
 
       {payments.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center text-gray-500">
+          <CardContent className="py-12 text-center text-muted-foreground">
             No tienes pagos registrados. Haz clic en &quot;+ Nuevo pago&quot; para comenzar.
           </CardContent>
         </Card>
@@ -166,8 +307,11 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-4">
                   <div>
                     <p className="font-medium">{p.title}</p>
-                    <p className="text-sm text-gray-500">
-                      ${p.amount} · Día {p.dueDay}
+                    <p className="text-sm text-muted-foreground">
+                      ${p.amount} · {describeFrequency(p)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Inicio: {formatDate(p.startDate)} · Próximo pago: {nextDueDate(p) ? formatDate(nextDueDate(p)!) : "—"}
                     </p>
                   </div>
                   <Badge className={statusColors[p.status]}>{p.status}</Badge>
@@ -203,7 +347,7 @@ export default function DashboardPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-red-600"
+                    className="text-destructive"
                     onClick={() => handleDelete(p._id)}
                   >
                     Eliminar

@@ -1,26 +1,34 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Crea un transporter reutilizable usando Gmail SMTP.
+// Las credenciales se toman de las variables de entorno EMAIL_USER y EMAIL_PASS.
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
-export async function sendReminderEmail(
-  to: string,
-  name: string,
-  payments: { title: string; amount: number; dueDay: number }[]
-) {
-  const paymentList = payments
-    .map((p) => `- ${p.title}: $${p.amount} (día ${p.dueDay})`)
-    .join("\n");
+/**
+ * Envía un correo electrónico usando Nodemailer (Gmail SMTP).
+ *
+ * @param to - Destinatario del correo.
+ * @param subject - Asunto del correo.
+ * @param html - Contenido del correo en formato HTML.
+ */
+export async function sendEmail(to: string, subject: string, html: string) {
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      html,
+    });
 
-  const { data, error } = await resend.emails.send({
-    from: "Pagos Agent <onboarding@resend.dev>",
-    to,
-    subject: `Recordatorio: tienes ${payments.length} pago(s) próximo(s)`,
-    text: `Hola ${name},\n\nTienes los siguientes pagos próximos a vencer:\n\n${paymentList}\n\nSaludos,\nPagos Agent`,
-  });
-
-  if (error) {
+    return info;
+  } catch (error) {
     console.error("Error enviando email:", error);
+    throw error;
   }
-
-  return data;
 }

@@ -1,2 +1,6 @@
 - Prefiere comunicarse en español. Confidence: 0.9
 - Para diseñar una arquitectura, prefiere que primero se revise la documentación del proyecto (por ejemplo, `PROJECT.md`). Confidence: 0.85
+- Enfatiza el alcance MVP; prefiere soluciones lean y funcionales sobre arquitecturas sobre-ingenierizadas. Lo ha reiterado explícitamente: "es un mvp y no la versión que mandaré a producción". Confidence: 0.95
+- Trabaja en un entorno Windows (rutas tipo `C:\Users\Jeff\...`). Confidence: 0.7
+- Stack típico: Next.js 16+ (App Router, Turbopack por defecto), TypeScript, Tailwind CSS, shadcn/ui, MongoDB/Mongoose, NextAuth, Vercel. Confidence: 0.8
+- Prefiere que los problemas de build/dependencias se resuelvan pragmáticamente (mover devDeps a deps si npm no las instala, agregar aliases explícitos en webpack y/o turbopack si tsconfig paths no se resuelven, mantener ambas configs para compatibilidad, etc.). Confidence: 0.8

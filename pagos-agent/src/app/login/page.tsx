@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,8 +32,12 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Error al registrar");
+        let message = "Error al registrar";
+        try {
+          const data = await res.json();
+          message = data.error || message;
+        } catch {}
+        setError(message);
         setLoading(false);
         return;
       }
@@ -54,9 +60,18 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+      <div className="bg-animated" />
+      <div className="fixed top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
+      <Card className="w-full max-w-md relative z-10">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Pagos Agent</CardTitle>
+          <div className="flex justify-center mb-2">
+            <Image src="/logo.png" alt="Pagos Agente" width={80} height={80} className="rounded-xl" />
+          </div>
+          <CardTitle className="text-2xl">
+            Pagos <span className="text-[#10b981]">Agente</span>
+          </CardTitle>
           <CardDescription>
             {isRegister ? "Crea tu cuenta" : "Inicia sesión en tu cuenta"}
           </CardDescription>
@@ -97,7 +112,7 @@ export default function LoginPage() {
                 required
               />
             </div>
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Cargando..." : isRegister ? "Registrarse" : "Iniciar sesión"}
             </Button>
@@ -108,7 +123,7 @@ export default function LoginPage() {
                 ¿Ya tienes cuenta?{" "}
                 <button
                   onClick={() => { setIsRegister(false); setError(""); }}
-                  className="text-blue-600 hover:underline"
+                  className="text-primary hover:underline"
                 >
                   Inicia sesión
                 </button>
@@ -118,7 +133,7 @@ export default function LoginPage() {
                 ¿No tienes cuenta?{" "}
                 <button
                   onClick={() => { setIsRegister(true); setError(""); }}
-                  className="text-blue-600 hover:underline"
+                  className="text-primary hover:underline"
                 >
                   Regístrate
                 </button>

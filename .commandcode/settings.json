@@ -6,7 +6,11 @@
       "Shell(npx shadcn@latest init -d 2 >& 1)",
       "Shell(npx shadcn@latest add button card input label dialog badge 2 >& 1)",
       "Shell(npx next build 2 >& 1)",
-      "Shell(npx next build --webpack 2 >& 1)"
+      "Shell(npx next build --webpack 2 >& 1)",
+      "powershell",
+      "Shell(dir:*)",
+      "Shell(type:*)",
+      "Shell(findstr:*)"
     ],
     "deny": [],
     "defaultMode": "default"

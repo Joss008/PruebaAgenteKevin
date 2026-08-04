@@ -1,22 +1,58 @@
-import { createPayment, getPaymentsByUser, updatePayment } from "./payment.service";
+import { createPayment, getPaymentsByUser, updatePayment, describeFrequency } from "./payment.service";
 
 interface ChatResult {
   message: string;
   action?: {
     type: "created" | "listed" | "updated" | "help";
-    data?: any;
+    data?: unknown;
   };
 }
 
 const HELP_TEXT = `¡Hola! Soy tu agente de pagos. Puedo ayudarte con:
 
-• **Registrar un pago**: "agregar pago Netflix 250 día 15"
+• **Registrar un pago**:
+  - "agregar pago Netflix 250 día 15" (cada mes)
+  - "agregar pago Internet 300 cada semana"
+  - "agregar pago Agua 200 cada 15 días"
+  - "agregar pago Renta 100 diario"
+  - "agregar pago Gimnasio 50 cada 20 días"
 • **Ver tus pagos**: "mis pagos" o "qué pagos tengo"
 • **Marcar como pagado**: "ya pagué Netflix"
 • **Pausar un pago**: "pausar Netflix"
 • **Ayuda**: "ayuda"
 
 ¿En qué te puedo ayudar?`;
+
+function parseRecurrence(text: string): {
+  frequency: "diario" | "semanal" | "quincenal" | "mensual" | "personalizado";
+  dueDay?: number;
+  intervalDays?: number;
+} {
+  const lower = text.toLowerCase();
+
+  const customMatch = lower.match(/cada\s+(\d+)\s*(?:día|dias|días|dia)?/);
+  if (customMatch) {
+    const n = parseInt(customMatch[1]);
+    if (n === 1) return { frequency: "diario" };
+    if (n === 7) return { frequency: "semanal" };
+    if (n === 15) return { frequency: "quincenal" };
+    if (n === 30) return { frequency: "mensual" };
+    return { frequency: "personalizado", intervalDays: n };
+  }
+
+  if (/\bsemanal\b|cada semana|semana/.test(lower)) return { frequency: "semanal" };
+  if (/quincen|cada quince|quince días/.test(lower)) return { frequency: "quincenal" };
+  if (/\bdiario\b|cada día|cada dia|diariamente/.test(lower)) return { frequency: "diario" };
+  if (/\bmensual\b|cada mes|mensualmente/.test(lower)) return { frequency: "mensual" };
+
+  const dayMatch = lower.match(/(?:día|dia|del)\s+(\d+)/);
+  if (dayMatch) {
+    const d = parseInt(dayMatch[1]);
+    if (d >= 1 && d <= 31) return { frequency: "mensual", dueDay: d };
+  }
+
+  return { frequency: "mensual" };
+}
 
 export async function processMessage(message: string, userId: string): Promise<ChatResult> {
   const msg = message.toLowerCase().trim();
@@ -26,22 +62,46 @@ export async function processMessage(message: string, userId: string): Promise<C
     return { message: HELP_TEXT, action: { type: "help" } };
   }
 
-  // Registrar pago: "agregar pago Netflix 250 día 15"
+  // Registrar pago: "agregar pago Netflix 250 día 15" / "cada semana" / "cada 15 días"
   const addMatch = msg.match(
-    /(?:agregar|añadir|crear|nuevo|registrar)\s+(?:pago\s+)?(.+?)\s+(\d+)\s+(?:día|dia|el|del)\s+(\d+)/
+    /(?:agregar|añadir|crear|nuevo|registrar)\s+(?:pago\s+)?(.+?)\s+(\d+)\s+(.+)/
   );
   if (addMatch) {
-    const title = addMatch[1].charAt(0).toUpperCase() + addMatch[1].slice(1);
+    const title = addMatch[1].trim();
     const amount = parseFloat(addMatch[2]);
-    const dueDay = parseInt(addMatch[3]);
+    const recurrence = parseRecurrence(addMatch[3]);
 
-    if (isNaN(amount) || isNaN(dueDay) || dueDay < 1 || dueDay > 31) {
-      return { message: "No pude entender los datos. Usa: agregar pago [nombre] [monto] día [número]" };
+    if (!title || isNaN(amount) || amount <= 0) {
+      return {
+        message:
+          "No pude entender los datos. Usa: agregar pago [nombre] [monto] cada [periodo] (ej. cada semana, cada 15 días, día 15)",
+      };
     }
 
-    const payment = await createPayment({ userId, title, amount, dueDay });
+    if (recurrence.frequency === "mensual" && !recurrence.dueDay) {
+      return {
+        message: "Para pagos mensuales indica el día: agregar pago Netflix 250 día 15",
+      };
+    }
+
+    const formattedTitle = title.charAt(0).toUpperCase() + title.slice(1);
+
+    const payment = await createPayment({
+      userId,
+      title: formattedTitle,
+      amount,
+      frequency: recurrence.frequency,
+      intervalDays: recurrence.intervalDays,
+      dueDay: recurrence.dueDay,
+      startDate: new Date(),
+    });
+
     return {
-      message: `✅ Pago registrado: **${title}** por $${amount} el día ${dueDay} de cada mes.`,
+      message: `✅ Pago registrado: **${formattedTitle}** por $${amount} — ${describeFrequency(
+        payment.frequency,
+        payment.intervalDays,
+        payment.dueDay
+      )}.`,
       action: { type: "created", data: payment },
     };
   }
@@ -92,11 +152,17 @@ export async function processMessage(message: string, userId: string): Promise<C
     const payments = await getPaymentsByUser(userId);
 
     if (payments.length === 0) {
-      return { message: "No tienes pagos registrados. Puedes agregar uno con: agregar pago [nombre] [monto] día [número]" };
+      return {
+        message:
+          "No tienes pagos registrados. Puedes agregar uno con: agregar pago [nombre] [monto] cada [periodo]",
+      };
     }
 
     const list = payments
-      .map((p) => `- **${p.title}**: $${p.amount} (día ${p.dueDay}) — ${p.status}`)
+      .map(
+        (p) =>
+          `- **${p.title}**: $${p.amount} (${describeFrequency(p.frequency, p.intervalDays, p.dueDay)}) — ${p.status}`
+      )
       .join("\n");
 
     return {

@@ -6,10 +6,12 @@ if (!MONGODB_URI) {
   throw new Error("MONGODB_URI no está definida en las variables de entorno");
 }
 
-let cached = global.mongoose;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cached = (global as any).mongoose;
 
 if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cached = (global as any).mongoose = { conn: null, promise: null };
 }
 
 export async function connectDB() {
