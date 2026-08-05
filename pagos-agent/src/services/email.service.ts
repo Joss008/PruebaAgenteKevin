@@ -1,5 +1,8 @@
 import nodemailer from "nodemailer";
 
+// Configuración del transporter SMTP de Gmail
+// Requiere una Contraseña de Aplicación de Google:
+// https://myaccount.google.com/apppasswords
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -8,6 +11,12 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+/**
+ * Envía un correo electrónico usando Gmail SMTP via Nodemailer.
+ * @param to - Dirección del destinatario
+ * @param subject - Asunto del correo
+ * @param html - Contenido HTML del correo
+ */
 export async function sendEmail(to: string, subject: string, html: string) {
   try {
     const info = await transporter.sendMail({
@@ -33,7 +42,7 @@ export function buildProximoAVencerHtml(userName: string, payments: PaymentEmail
   const list = payments.map((p) => `<li>${p.title}: S/ ${p.amount}</li>`).join("");
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style color="#e67e22;">Recordatorio de pago proximo a vencer</h2>
+      <h2 style="color: #e67e22;">Recordatorio de pago proximo a vencer</h2>
       <p>Hola <strong>${userName}</strong>,</p>
       <p>Tienes los siguientes pagos proximos a vencer:</p>
       <ul style="background: #fdf2e9; padding: 15px 20px; border-radius: 8px;">${list}</ul>
